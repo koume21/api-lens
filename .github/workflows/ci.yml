@@ -1,0 +1,32 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    # 対応 OS はまず macOS なので macOS で確認する
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # フロントエンド: 型チェック（tsc）+ vite build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      # Rust 側（tauri::generate_context! が ../dist を参照するので、フロントのビルド後に実行する）
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+      - run: cargo test
+        working-directory: src-tauri

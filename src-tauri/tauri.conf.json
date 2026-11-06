@@ -12,9 +12,16 @@
   "app": {
     "windows": [
       {
-        "title": "api-lens",
-        "width": 800,
-        "height": 600
+        "title": "api通信観測（API LENS）",
+        "width": 1000,
+        "height": 800,
+        "shadow": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 14,
+          "y": 25
+        }
       }
     ],
     "security": {

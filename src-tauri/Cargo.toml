@@ -26,9 +26,15 @@ serde_json = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "charset", "http2"] }
 # 保存係。bundled で SQLite 本体も一緒にビルドする（OS に入っている SQLite のバージョンに左右されない）
 rusqlite = { version = "0.43", features = ["bundled"] }
+# 関所。HTTP/HTTPS の MITM プロキシ（既定の機能: rcgen で証明書発行・rustls・圧縮の解凍）
+hudsucker = "0.25"
+# hudsucker の本文（Body）を最後まで読むための道具（collect）
+http-body-util = "0.1"
+# 関所の待ち受け（TcpListener）と停止の合図（oneshot）
+tokio = { version = "1", features = ["net", "sync", "rt"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

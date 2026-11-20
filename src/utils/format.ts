@@ -57,3 +57,20 @@ export function prettyBody(body: string): { text: string; isJson: boolean } {
   }
   return { text: body, isJson: false };
 }
+
+/** メソッドの文字色（一覧で見分けやすくする） */
+export function methodColorClass(method: string): string {
+  switch (method.toUpperCase()) {
+    case "GET":
+      return "text-ok";
+    case "POST":
+      return "text-warn";
+    case "PUT":
+    case "PATCH":
+      return "text-accent";
+    case "DELETE":
+      return "text-ng";
+    default:
+      return "text-muted";
+  }
+}

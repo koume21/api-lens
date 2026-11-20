@@ -63,3 +63,16 @@ export type ObservedHost = {
   host: string;
   createdAt: number;
 };
+
+/** 通信 1 件の要約（一覧の 1 行分）。Rust の ExchangeSummary。詳細は getExchange で取り寄せる */
+export type ExchangeSummary = Pick<
+  Exchange,
+  "id" | "startedAt" | "kind" | "method" | "url" | "status" | "durationMs" | "size" | "error"
+>;
+
+/** 観測の状態。Rust の ObserveStatus */
+export type ObserveStatus = {
+  running: boolean;
+  /** 観測中なら待ち受けアドレス（例: 127.0.0.1:8080） */
+  addr: string | null;
+};

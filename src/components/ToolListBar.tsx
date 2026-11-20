@@ -1,7 +1,7 @@
 // 観測画面の「ツールバー」
 // Figma: API通信観測 画面デザイン > 観測画面 > ツールバー
 // 左から：観測開始/停止（F11）・状態・対象の切り替え（F22）・対象ホスト設定（F21）・
-//         URL で絞り込み（F14）・成功/失敗の切り替え（F15）・履歴を削除（F20）
+//         HTTPS 証明書（F13）・URL で絞り込み（F14）・成功/失敗の切り替え（F15）・履歴を削除（F20）
 
 import { useState } from "react";
 
@@ -28,6 +28,8 @@ type ToolListBarProps = {
   onHostFilterChange: (filter: HostFilter) => void;
   /** 「⚙ 対象ホスト」が押されたとき（設定ダイアログを開く） */
   onOpenHosts: () => void;
+  /** 「🔒 HTTPS」が押されたとき（証明書の登録手順を開く） */
+  onOpenCert: () => void;
 
   query: string;
   onQueryChange: (query: string) => void;
@@ -118,13 +120,23 @@ export function ToolListBar(props: ToolListBarProps) {
         ⚙ 対象ホスト
       </button>
 
+      {/* HTTPS の証明書の登録手順（F13） */}
+      <button
+        type="button"
+        onClick={props.onOpenCert}
+        className="h-8 rounded-md border border-line px-[12px] text-[13px] whitespace-nowrap text-fg hover:bg-line/40"
+        title="HTTPS の中身を見るための証明書"
+      >
+        🔒 HTTPS
+      </button>
+
       {/* URL で絞り込む入力欄（F14） */}
       <input
         type="text"
         placeholder="🔍 URLで絞り込み（例: /api/users）"
         value={props.query}
         onChange={(e) => props.onQueryChange(e.target.value)}
-        className="h-8 w-[240px] min-w-0 rounded-md border border-line bg-base px-[11px] text-[13px] text-fg placeholder:text-dim"
+        className="h-8 min-w-[140px] flex-1 rounded-md border border-line bg-base px-[11px] text-[13px] text-fg placeholder:text-dim"
         spellCheck={false}
       />
 
@@ -143,9 +155,6 @@ export function ToolListBar(props: ToolListBarProps) {
           </button>
         ))}
       </div>
-
-      {/* 右端に寄せるためのすき間 */}
-      <div className="flex-1" />
 
       {/* 履歴を削除ボタン（F20） */}
       <button

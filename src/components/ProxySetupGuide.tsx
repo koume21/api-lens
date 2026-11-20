@@ -7,9 +7,11 @@ type ProxySetupGuideProps = {
   status: ObserveStatus;
   hosts: ObservedHost[];
   port: string;
+  /** HTTPS 証明書の登録手順を開く */
+  onOpenCert: () => void;
 };
 
-export function ProxySetupGuide({ status, hosts, port }: ProxySetupGuideProps) {
+export function ProxySetupGuide({ status, hosts, port, onOpenCert }: ProxySetupGuideProps) {
   const addr = status.addr ?? `127.0.0.1:${port || "8080"}`;
   const [host, portNum] = addr.split(":");
 
@@ -41,6 +43,13 @@ export function ProxySetupGuide({ status, hosts, port }: ProxySetupGuideProps) {
               <code className="font-mono">{"<-loopback>"}</code> は「localhost もプロキシを通す」指定（ないと localhost は素通りされる）。
             </li>
           </ul>
+        </li>
+        <li>
+          本番などの HTTPS も中身まで見るときは、
+          <button type="button" className="mx-1 rounded-md border border-line px-2 py-0.5 text-fg hover:bg-line/40" onClick={onOpenCert}>
+            🔒 HTTPS
+          </button>
+          の手順で証明書を 1 回だけ登録する（HTTP だけなら不要）。
         </li>
         <li>ブラウザで自分のアプリを操作すると、ここに通信が 1 行ずつ増えていきます。</li>
       </ol>

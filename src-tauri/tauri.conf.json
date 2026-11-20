@@ -13,7 +13,7 @@
     "windows": [
       {
         "title": "api通信観測（API LENS）",
-        "width": 1000,
+        "width": 1280,
         "height": 800,
         "shadow": true,
         "titleBarStyle": "Overlay",

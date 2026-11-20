@@ -76,3 +76,13 @@ export type ObserveStatus = {
   /** 観測中なら待ち受けアドレス（例: 127.0.0.1:8080） */
   addr: string | null;
 };
+
+/** HTTPS 観測用の認証局証明書の情報（F13）。Rust の CaInfo */
+export type CaInfo = {
+  /** 証明書（公開してよい方）のファイルの場所 */
+  certPath: string;
+  /** キーチェーンアクセスで探すときの名前 */
+  commonName: string;
+  /** 信頼済みとして登録されているか（目安）。調べられないときは null */
+  trusted: boolean | null;
+};

@@ -14,6 +14,7 @@ import {
   startObserve,
   stopObserve,
 } from "../api/observe";
+import { CertificateDialog } from "../components/CertificateDialog";
 import { ExchangeDetail } from "../components/ExchangeDetail";
 import { ExchangeList } from "../components/ExchangeList";
 import { HostSettingsDialog } from "../components/HostSettingsDialog";
@@ -34,6 +35,7 @@ export function ObservePage() {
 
   const [hosts, setHosts] = useState<ObservedHost[]>([]);
   const [hostDialogOpen, setHostDialogOpen] = useState(false);
+  const [certDialogOpen, setCertDialogOpen] = useState(false);
 
   /** 通信の一覧（要約・新しい順） */
   const [items, setItems] = useState<ExchangeSummary[]>([]);
@@ -150,6 +152,7 @@ export function ObservePage() {
         hostFilter={hostFilter}
         onHostFilterChange={setHostFilter}
         onOpenHosts={() => setHostDialogOpen(true)}
+        onOpenCert={() => setCertDialogOpen(true)}
         query={query}
         onQueryChange={setQuery}
         statusFilter={statusFilter}
@@ -168,7 +171,7 @@ export function ObservePage() {
 
       {items.length === 0 ? (
         <div className="min-h-0 flex-1 overflow-auto">
-          <ProxySetupGuide status={status} hosts={hosts} port={port} />
+          <ProxySetupGuide status={status} hosts={hosts} port={port} onOpenCert={() => setCertDialogOpen(true)} />
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -195,6 +198,8 @@ export function ObservePage() {
           )}
         </div>
       )}
+
+      {certDialogOpen && <CertificateDialog onClose={() => setCertDialogOpen(false)} />}
 
       {hostDialogOpen && (
         <HostSettingsDialog

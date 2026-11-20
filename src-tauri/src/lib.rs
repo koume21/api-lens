@@ -43,6 +43,9 @@ pub fn run() {
             commands::saved::update_saved_request,
             commands::saved::list_saved_requests,
             commands::saved::delete_saved_request,
+            commands::hosts::list_hosts,
+            commands::hosts::add_host,
+            commands::hosts::delete_host,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

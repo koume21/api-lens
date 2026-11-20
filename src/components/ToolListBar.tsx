@@ -1,7 +1,12 @@
 // 観測画面の「ツールバー」（見た目だけ）
 // Figma: API通信観測 画面デザイン > 観測画面 > ツールバー
-// クリックしたときの処理や状態はまだ入れていない
-export function ToolListBar() {
+// 「対象ホスト」ボタンだけ動く。ほかのボタンの処理や状態は観測の実装で入れる
+type ToolListBarProps = {
+    /** 「⚙ 対象ホスト」が押されたとき（設定ダイアログを開く） */
+    onOpenHosts: () => void;
+};
+
+export function ToolListBar({ onOpenHosts }: ToolListBarProps) {
     return (
         <div className="flex h-[53px] items-center gap-[10px] border-b border-[#2a2f36] bg-[#16191d] px-4 font-['Noto_Sans_JP',sans-serif]">
             {/* 観測を停止ボタン（観測中なので赤） */}
@@ -25,7 +30,7 @@ export function ToolListBar() {
             </div>
 
             {/* 対象ホストの設定ボタン */}
-            <button className="h-8 rounded-md border border-[#2a2f36] px-[15px] text-[13px] whitespace-nowrap text-[#e6e8eb]">
+            <button onClick={onOpenHosts} className="h-8 rounded-md border border-[#2a2f36] px-[15px] text-[13px] whitespace-nowrap text-[#e6e8eb]">
                 ⚙ 対象ホスト
             </button>
 

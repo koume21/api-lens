@@ -53,3 +53,13 @@ export type SavedRequest = {
   request: RequestInput;
   createdAt: number;
 };
+
+/** 観測対象ホスト（F21・F22）。Rust の ObservedHost（DB の表3） */
+export type ObservedHost = {
+  id: number;
+  /** 表示名（例: ローカル、本番） */
+  label: string;
+  /** ホスト（例: localhost:3000、api.example.com） */
+  host: string;
+  createdAt: number;
+};

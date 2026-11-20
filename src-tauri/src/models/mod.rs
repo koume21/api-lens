@@ -55,6 +55,40 @@ pub struct SavedRequest {
     pub created_at: i64,
 }
 
+/// 観測対象ホスト（F21・F22）。DB の「表3：観測対象ホスト」に対応する。
+/// 関所はここに登録したホストへの通信だけを記録し、それ以外は中身を開かずに素通しする。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObservedHost {
+    pub id: i64,
+    /// 表示名（例: ローカル、本番）
+    pub label: String,
+    /// ホスト（例: `localhost:3000`、`api.example.com`）。`normalize_host` で整えた形で持つ
+    pub host: String,
+    pub created_at: i64,
+}
+
+/// 入力されたホストを比べやすい形に整える。
+///
+/// - 前後の空白を落とし、小文字にする（ホスト名は大文字小文字を区別しない）
+/// - `http://` などのスキームと、`/` 以降のパスを取り除く
+///   （URL をそのまま貼り付けても登録できるように）
+///
+/// 空になったり空白を含んだりするなら None
+pub fn normalize_host(input: &str) -> Option<String> {
+    let mut s = input.trim().to_lowercase();
+    if let Some(pos) = s.find("://") {
+        s = s[pos + 3..].to_string();
+    }
+    if let Some(pos) = s.find(['/', '?', '#']) {
+        s.truncate(pos);
+    }
+    if s.is_empty() || s.contains(char::is_whitespace) {
+        return None;
+    }
+    Some(s)
+}
+
 /// 通信の種類。観測（ブラウザ → 関所）か、送信（送信画面 → 送信役）か
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -144,6 +178,24 @@ pub fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_host_strips_scheme_and_path() {
+        assert_eq!(
+            normalize_host(" http://LocalHost:3000/api?x=1 "),
+            Some("localhost:3000".into())
+        );
+        assert_eq!(
+            normalize_host("https://api.example.com"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(
+            normalize_host("api.example.com/"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(normalize_host("   "), None);
+        assert_eq!(normalize_host("a b"), None);
+    }
 
     #[test]
     fn body_capture_keeps_small_body() {

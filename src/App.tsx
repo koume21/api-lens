@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { TitleBar } from "./components/TitleBar";
-import { ToolListBar } from "./components/ToolListBar";
+import { ObservePage } from "./pages/ObservePage";
 import { SendPage } from "./pages/SendPage";
 
 // Tabのタイプ定義
@@ -18,7 +18,7 @@ function App() {
         条件分岐で片方だけ描画すると、タブを切り替えたときに入力中の内容や結果が消えてしまうため。
       */}
       <div className={tab === "observe" ? "min-h-0 flex-1" : "hidden"}>
-        <ToolListBar />
+        <ObservePage />
       </div>
       <div className={tab === "send" ? "min-h-0 flex-1" : "hidden"}>
         <SendPage />

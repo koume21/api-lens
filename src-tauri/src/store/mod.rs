@@ -6,6 +6,7 @@
 //! 表（`docs/05-design.md` の DB 設計）:
 //! - `exchanges`:      表1 通信の記録（観測と送信の両方。最新 1,000 件まで）
 //! - `saved_requests`: 表2 保存したリクエスト
+//! - `observed_hosts`: 表3 観測対象ホスト
 //!
 //! ヘッダーは名前と値のペアの配列を JSON 文字列にして 1 列に入れる。
 
@@ -16,7 +17,9 @@ use std::sync::Mutex;
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use crate::models::{Exchange, ExchangeKind, HttpHeader, RequestInput, SavedRequest, now_ms};
+use crate::models::{
+    Exchange, ExchangeKind, HttpHeader, ObservedHost, RequestInput, SavedRequest, now_ms,
+};
 
 /// 通信の記録を残す最大件数（N2）
 pub const MAX_EXCHANGES: i64 = 1_000;
@@ -27,6 +30,8 @@ pub enum StoreError {
     Sqlite(rusqlite::Error),
     Json(serde_json::Error),
     NotFound,
+    /// 同じものがすでにある（UNIQUE 制約に当たった）
+    Duplicate,
 }
 
 impl std::fmt::Display for StoreError {
@@ -35,6 +40,7 @@ impl std::fmt::Display for StoreError {
             StoreError::Sqlite(e) => write!(f, "データベースの操作に失敗しました: {e}"),
             StoreError::Json(e) => write!(f, "保存データの読み書きに失敗しました: {e}"),
             StoreError::NotFound => write!(f, "対象のデータが見つかりません"),
+            StoreError::Duplicate => write!(f, "同じものがすでに登録されています"),
         }
     }
 }
@@ -260,6 +266,58 @@ impl Store {
             .execute("DELETE FROM saved_requests WHERE id = ?1", [id])?;
         Ok(())
     }
+
+    // ------------------------------------------------------------------
+    // 表3：観測対象ホスト
+    // ------------------------------------------------------------------
+
+    /// 観測対象ホストを登録する。`host` は `models::normalize_host` で整えてから渡すこと
+    pub fn insert_host(&self, label: &str, host: &str) -> StoreResult<ObservedHost> {
+        let conn = self.conn();
+        let created_at = now_ms();
+        let result = conn.execute(
+            "INSERT INTO observed_hosts (label, host, created_at) VALUES (?1, ?2, ?3)",
+            params![label, host, created_at],
+        );
+        match result {
+            Ok(_) => {}
+            // UNIQUE 制約違反は「もう登録済み」として分かりやすいエラーにする
+            Err(rusqlite::Error::SqliteFailure(e, _))
+                if e.code == rusqlite::ErrorCode::ConstraintViolation =>
+            {
+                return Err(StoreError::Duplicate);
+            }
+            Err(e) => return Err(e.into()),
+        }
+        Ok(ObservedHost {
+            id: conn.last_insert_rowid(),
+            label: label.to_string(),
+            host: host.to_string(),
+            created_at,
+        })
+    }
+
+    /// 観測対象ホストを登録順に取り出す
+    pub fn list_hosts(&self) -> StoreResult<Vec<ObservedHost>> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT id, label, host, created_at FROM observed_hosts ORDER BY id")?;
+        let rows = stmt.query_map([], |r| {
+            Ok(ObservedHost {
+                id: r.get(0)?,
+                label: r.get(1)?,
+                host: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        })?;
+        collect_rows(rows)
+    }
+
+    pub fn delete_host(&self, id: i64) -> StoreResult<()> {
+        self.conn()
+            .execute("DELETE FROM observed_hosts WHERE id = ?1", [id])?;
+        Ok(())
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -411,6 +469,22 @@ mod tests {
             store.update_saved_request(saved.id, "x", &changed),
             Err(StoreError::NotFound)
         ));
+    }
+
+    #[test]
+    fn hosts_crud_and_duplicate() {
+        let store = Store::open_in_memory().unwrap();
+        let h = store.insert_host("ローカル", "localhost:3000").unwrap();
+        assert!(matches!(
+            store.insert_host("もう一度", "localhost:3000"),
+            Err(StoreError::Duplicate)
+        ));
+        store.insert_host("本番", "api.example.com").unwrap();
+        let list = store.list_hosts().unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].label, "ローカル");
+        store.delete_host(h.id).unwrap();
+        assert_eq!(store.list_hosts().unwrap().len(), 1);
     }
 
     #[test]

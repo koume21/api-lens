@@ -41,6 +41,15 @@ const MIGRATIONS: &[&str] = &[
         created_at INTEGER NOT NULL
     );
     ",
+    // v2: 表3（観測対象ホスト）。同じホストを 2 回登録できないよう UNIQUE にする
+    "
+    CREATE TABLE observed_hosts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        label      TEXT    NOT NULL,                -- 表示名（例: ローカル、本番）
+        host       TEXT    NOT NULL UNIQUE,         -- 例: localhost:3000 / api.example.com
+        created_at INTEGER NOT NULL
+    );
+    ",
 ];
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {

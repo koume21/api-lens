@@ -6,6 +6,7 @@
 //! コマンドはすべて `async fn` にしている。Tauri では async でないコマンドは
 //! メインスレッドで動くため、DB 操作などで少しでも待つと画面が固まってしまう。
 
+pub mod hosts;
 pub mod saved;
 pub mod send;
 

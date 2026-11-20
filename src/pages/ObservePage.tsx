@@ -27,7 +27,12 @@ import { hostMatches } from "../utils/host";
 /** 一覧に持つ最大件数（Rust 側で DB に残す件数 N2 と同じ） */
 const MAX_ITEMS = 1000;
 
-export function ObservePage() {
+type ObservePageProps = {
+  /** 「送信画面にコピー」が押されたとき（F17） */
+  onCopyToSend: (exchange: Exchange) => void;
+};
+
+export function ObservePage({ onCopyToSend }: ObservePageProps) {
   const [status, setStatus] = useState<ObserveStatus>({ running: false, addr: null });
   const [port, setPort] = useState("8080");
   const [busy, setBusy] = useState(false);
@@ -193,7 +198,19 @@ export function ObservePage() {
               >
                 ×
               </button>
-              <ExchangeDetail exchange={detail} />
+              <ExchangeDetail
+                exchange={detail}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => onCopyToSend(detail)}
+                    className="rounded-md border border-accent px-2 py-0.5 text-[11px] text-accent hover:bg-accent/10"
+                    title="この通信を送信画面に読み込んで、直して送り直す"
+                  >
+                    ↗ 送信画面にコピー
+                  </button>
+                }
+              />
             </div>
           )}
         </div>

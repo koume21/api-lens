@@ -42,6 +42,92 @@ pub struct RequestInput {
     pub body: String,
 }
 
+/// 名前を付けて保存したリクエスト（F9・F10）。DB の「表2：保存したリクエスト」に対応する。
+///
+/// 「リクエストの定義」（何を送るか）だけを持ち、送った結果は持たない。
+/// 結果は送るたびに変わるので、通信の記録（`Exchange`）の方に残す。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedRequest {
+    pub id: i64,
+    pub name: String,
+    pub request: RequestInput,
+    pub created_at: i64,
+}
+
+/// 観測対象ホスト（F21・F22）。DB の「表3：観測対象ホスト」に対応する。
+/// 関所はここに登録したホストへの通信だけを記録し、それ以外は中身を開かずに素通しする。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObservedHost {
+    pub id: i64,
+    /// 表示名（例: ローカル、本番）
+    pub label: String,
+    /// ホスト（例: `localhost:3000`、`api.example.com`）。`normalize_host` で整えた形で持つ
+    pub host: String,
+    pub created_at: i64,
+}
+
+/// 入力されたホストを比べやすい形に整える。
+///
+/// - 前後の空白を落とし、小文字にする（ホスト名は大文字小文字を区別しない）
+/// - `http://` などのスキームと、`/` 以降のパスを取り除く
+///   （URL をそのまま貼り付けても登録できるように）
+///
+/// 空になったり空白を含んだりするなら None
+pub fn normalize_host(input: &str) -> Option<String> {
+    let mut s = input.trim().to_lowercase();
+    if let Some(pos) = s.find("://") {
+        s = s[pos + 3..].to_string();
+    }
+    if let Some(pos) = s.find(['/', '?', '#']) {
+        s.truncate(pos);
+    }
+    if s.is_empty() || s.contains(char::is_whitespace) {
+        return None;
+    }
+    Some(s)
+}
+
+/// 通信の宛先（`host` または `host:port`）が、登録したホストに当たるか。
+///
+/// - 登録にポートがある（`localhost:3000`）→ ホストとポートが両方一致したときだけ
+/// - 登録にポートがない（`api.example.com`）→ ポートは問わない（80 でも 443 でも当たる）
+///
+/// サブドメイン（`www.example.com` に対する `example.com`）は当てない。
+/// 見たい相手だけを正確に選べるようにするため。
+/// 画面側にも同じ規則の `hostMatches`（src/utils/host.ts）がある。変えるときは両方直すこと。
+pub fn host_matches(registered: &str, authority: &str) -> bool {
+    let authority = authority.to_lowercase();
+    if has_port(registered) {
+        registered == authority
+    } else {
+        strip_port(&authority) == registered
+    }
+}
+
+/// `host:port` の形か（IPv6 の `[::1]:8080` も考える）
+fn has_port(s: &str) -> bool {
+    match s.rfind(':') {
+        Some(pos) => {
+            !s[pos..].contains(']')
+                && pos + 1 < s.len()
+                && s[pos + 1..].chars().all(|c| c.is_ascii_digit())
+                // `::1` のような括弧なしの IPv6 はポートなしとみなす
+                && (s.starts_with('[') || s.matches(':').count() == 1)
+        }
+        None => false,
+    }
+}
+
+/// `host:port` から `:port` を取り除く
+fn strip_port(s: &str) -> &str {
+    match (has_port(s), s.rfind(':')) {
+        (true, Some(pos)) => &s[..pos],
+        _ => s,
+    }
+}
+
 /// 通信の種類。観測（ブラウザ → 関所）か、送信（送信画面 → 送信役）か
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -75,6 +161,40 @@ pub struct Exchange {
     pub body_truncated: bool,
     /// 失敗したときの理由（タイムアウト・接続失敗など）
     pub error: Option<String>,
+}
+
+/// 通信 1 件の要約（一覧の 1 行分）。
+///
+/// 一覧には最大 1,000 件並ぶので、ヘッダーや本文（最大 10MB）まで画面に送ると重くなる。
+/// 一覧とイベントではこの要約だけを送り、詳細は行をクリックしたときに番号で取り寄せる。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExchangeSummary {
+    pub id: i64,
+    pub started_at: i64,
+    pub kind: ExchangeKind,
+    pub method: String,
+    pub url: String,
+    pub status: Option<u16>,
+    pub duration_ms: u64,
+    pub size: u64,
+    pub error: Option<String>,
+}
+
+impl From<&Exchange> for ExchangeSummary {
+    fn from(ex: &Exchange) -> Self {
+        Self {
+            id: ex.id,
+            started_at: ex.started_at,
+            kind: ex.kind,
+            method: ex.method.clone(),
+            url: ex.url.clone(),
+            status: ex.status,
+            duration_ms: ex.duration_ms,
+            size: ex.size,
+            error: ex.error.clone(),
+        }
+    }
 }
 
 /// 本文を貯めながら、10MB を超えた分は捨てて「全体のサイズ」だけ数える入れ物。
@@ -131,6 +251,42 @@ pub fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_host_strips_scheme_and_path() {
+        assert_eq!(
+            normalize_host(" http://LocalHost:3000/api?x=1 "),
+            Some("localhost:3000".into())
+        );
+        assert_eq!(
+            normalize_host("https://api.example.com"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(
+            normalize_host("api.example.com/"),
+            Some("api.example.com".into())
+        );
+        assert_eq!(normalize_host("   "), None);
+        assert_eq!(normalize_host("a b"), None);
+    }
+
+    #[test]
+    fn host_matching_rules() {
+        // ポートあり → 完全一致だけ
+        assert!(host_matches("localhost:3000", "localhost:3000"));
+        assert!(host_matches("localhost:3000", "LOCALHOST:3000"));
+        assert!(!host_matches("localhost:3000", "localhost:5173"));
+        assert!(!host_matches("localhost:3000", "localhost"));
+        // ポートなし → ポートは問わない
+        assert!(host_matches("api.example.com", "api.example.com:443"));
+        assert!(host_matches("api.example.com", "api.example.com"));
+        // サブドメインや似た名前は当てない
+        assert!(!host_matches("example.com", "www.example.com:443"));
+        assert!(!host_matches("example.com", "example.com.evil.test"));
+        // IPv6
+        assert!(host_matches("[::1]:3000", "[::1]:3000"));
+        assert!(host_matches("[::1]", "[::1]:8080"));
+    }
 
     #[test]
     fn body_capture_keeps_small_body() {

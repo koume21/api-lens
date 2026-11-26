@@ -1,1 +1,30 @@
 @import "tailwindcss";
+
+/*
+ * 色とフォントの名前（Tailwind v4 の @theme）。
+ * Figma の画面デザインで使っている色に名前を付けたもの。
+ * 例: --color-panel を定義すると bg-panel / text-panel / border-panel が使える。
+ */
+@theme {
+  --color-base: #101215;   /* 一番奥の背景・入力欄 */
+  --color-panel: #16191d;  /* ツールバーやパネルの背景 */
+  --color-line: #2a2f36;   /* 区切り線・枠線 */
+  --color-fg: #e6e8eb;     /* ふつうの文字 */
+  --color-muted: #9aa3ad;  /* 補足の文字 */
+  --color-dim: #6b7480;    /* プレースホルダーなど薄い文字 */
+  --color-accent: #2563eb; /* 選択中・主ボタン */
+  --color-ok: #22c55e;     /* 成功（2xx） */
+  --color-warn: #f59e0b;   /* リダイレクト（3xx）・注意 */
+  --color-ng: #ef4444;     /* 失敗（4xx / 5xx / 通信エラー） */
+
+  --font-sans: "Noto Sans JP", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* ウィンドウ全体を画面の高さいっぱいに使う（中のパネルを個別にスクロールさせるため） */
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}

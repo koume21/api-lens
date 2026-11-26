@@ -18,7 +18,8 @@ use std::sync::Mutex;
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::models::{
-    Exchange, ExchangeKind, HttpHeader, ObservedHost, RequestInput, SavedRequest, now_ms,
+    Exchange, ExchangeKind, ExchangeSummary, HttpHeader, ObservedHost, RequestInput, SavedRequest,
+    now_ms,
 };
 
 /// 通信の記録を残す最大件数（N2）
@@ -153,6 +154,54 @@ impl Store {
         ))?;
         let rows = stmt.query_map(params![kind.map(kind_to_str), limit], row_to_exchange)?;
         collect_rows(rows)
+    }
+
+    /// 一覧用の要約を新しい順に取り出す（本文やヘッダーは読まないので軽い）
+    pub fn list_exchange_summaries(
+        &self,
+        kind: Option<ExchangeKind>,
+        limit: i64,
+    ) -> StoreResult<Vec<ExchangeSummary>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, started_at, kind, method, url, status, duration_ms, size, error
+             FROM exchanges
+             WHERE (?1 IS NULL OR kind = ?1)
+             ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![kind.map(kind_to_str), limit], |r| {
+            Ok(ExchangeSummary {
+                id: r.get(0)?,
+                started_at: r.get(1)?,
+                kind: str_to_kind(&r.get::<_, String>(2)?),
+                method: r.get(3)?,
+                url: r.get(4)?,
+                status: r.get(5)?,
+                duration_ms: r.get::<_, i64>(6)? as u64,
+                size: r.get::<_, i64>(7)? as u64,
+                error: r.get(8)?,
+            })
+        })?;
+        collect_rows(rows)
+    }
+
+    /// 番号で 1 件取り出す（一覧の行をクリックしたときの詳細表示）
+    pub fn get_exchange(&self, id: i64) -> StoreResult<Exchange> {
+        let conn = self.conn();
+        conn.query_row(
+            &format!("SELECT {EXCHANGE_COLUMNS} FROM exchanges WHERE id = ?1"),
+            [id],
+            row_to_exchange,
+        )
+        .optional()?
+        .ok_or(StoreError::NotFound)
+    }
+
+    /// 指定した種類の記録をまとめて消す（F20: 履歴をまとめて削除）
+    pub fn delete_exchanges(&self, kind: ExchangeKind) -> StoreResult<usize> {
+        Ok(self
+            .conn()
+            .execute("DELETE FROM exchanges WHERE kind = ?1", [kind_to_str(kind)])?)
     }
 
     // ------------------------------------------------------------------
@@ -345,16 +394,19 @@ fn json_column(row: &Row, idx: usize) -> rusqlite::Result<Vec<HttpHeader>> {
     })
 }
 
+fn str_to_kind(s: &str) -> ExchangeKind {
+    if s == "observe" {
+        ExchangeKind::Observe
+    } else {
+        ExchangeKind::Send
+    }
+}
+
 fn row_to_exchange(row: &Row) -> rusqlite::Result<Exchange> {
-    let kind: String = row.get(2)?;
     Ok(Exchange {
         id: row.get(0)?,
         started_at: row.get(1)?,
-        kind: if kind == "observe" {
-            ExchangeKind::Observe
-        } else {
-            ExchangeKind::Send
-        },
+        kind: str_to_kind(&row.get::<_, String>(2)?),
         method: row.get(3)?,
         url: row.get(4)?,
         request_headers: json_column(row, 5)?,
@@ -424,6 +476,29 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn summaries_get_and_delete_by_kind() {
+        let store = Store::open_in_memory().unwrap();
+        let mut observed = sample_exchange("http://localhost:3000/api");
+        observed.kind = ExchangeKind::Observe;
+        let id = store.insert_exchange(&observed).unwrap();
+        store
+            .insert_exchange(&sample_exchange("http://send/"))
+            .unwrap();
+
+        let list = store
+            .list_exchange_summaries(Some(ExchangeKind::Observe), 10)
+            .unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].url, "http://localhost:3000/api");
+        assert_eq!(store.get_exchange(id).unwrap().response_body, "{}");
+
+        // 観測だけを消して、送信の記録は残る
+        assert_eq!(store.delete_exchanges(ExchangeKind::Observe).unwrap(), 1);
+        assert!(matches!(store.get_exchange(id), Err(StoreError::NotFound)));
+        assert_eq!(store.list_exchanges(None, 10).unwrap().len(), 1);
     }
 
     #[test]

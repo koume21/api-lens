@@ -23,10 +23,14 @@ pub async fn add_host(
     }
     let host = normalize_host(&host)
         .ok_or("ホストの形式が正しくありません（例: localhost:3000、api.example.com）")?;
-    state.store.insert_host(label, &host).map_err(to_message)
+    let added = state.store.insert_host(label, &host).map_err(to_message)?;
+    // 観測中でもすぐ効くよう、関所の一覧も入れ替える
+    state.sync_proxy_hosts()?;
+    Ok(added)
 }
 
 #[tauri::command]
 pub async fn delete_host(state: State<'_, AppState>, id: i64) -> CmdResult<()> {
-    state.store.delete_host(id).map_err(to_message)
+    state.store.delete_host(id).map_err(to_message)?;
+    state.sync_proxy_hosts()
 }

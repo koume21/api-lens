@@ -3,12 +3,14 @@
 //! 部品の役割:
 //! - `commands`: 画面からの依頼を受ける受付（画面とやり取りするのはここだけ）
 //! - `client`:   送信役（reqwest）
+//! - `proxy`:    関所（hudsucker）
 //! - `store`:    保存係（SQLite）
 //! - `models`:   データの形
 
 mod client;
 mod commands;
 mod models;
+mod proxy;
 mod store;
 
 use tauri::Manager;
@@ -32,7 +34,10 @@ pub fn run() {
             let state = AppState {
                 client: client::HttpClient::new()?,
                 store: store::Store::open(&data_dir.join(DB_FILE))?,
+                proxy: proxy::ProxyController::new(),
             };
+            // 前回までに登録した観測対象ホストを関所に知らせておく
+            state.sync_proxy_hosts()?;
             app.manage(state);
             Ok(())
         })
@@ -46,6 +51,12 @@ pub fn run() {
             commands::hosts::list_hosts,
             commands::hosts::add_host,
             commands::hosts::delete_host,
+            commands::observe::start_observe,
+            commands::observe::stop_observe,
+            commands::observe::observe_status,
+            commands::observe::list_observed,
+            commands::observe::get_exchange,
+            commands::observe::clear_observed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

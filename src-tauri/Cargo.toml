@@ -24,6 +24,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 送信役。OS 標準の TLS ではなく rustls を使う。OS のプロキシ設定は使わないので system-proxy は外す
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "charset", "http2"] }
+# 保存係。bundled で SQLite 本体も一緒にビルドする（OS に入っている SQLite のバージョンに左右されない）
+rusqlite = { version = "0.43", features = ["bundled"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

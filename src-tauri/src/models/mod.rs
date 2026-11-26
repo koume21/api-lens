@@ -42,6 +42,19 @@ pub struct RequestInput {
     pub body: String,
 }
 
+/// 名前を付けて保存したリクエスト（F9・F10）。DB の「表2：保存したリクエスト」に対応する。
+///
+/// 「リクエストの定義」（何を送るか）だけを持ち、送った結果は持たない。
+/// 結果は送るたびに変わるので、通信の記録（`Exchange`）の方に残す。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedRequest {
+    pub id: i64,
+    pub name: String,
+    pub request: RequestInput,
+    pub created_at: i64,
+}
+
 /// 通信の種類。観測（ブラウザ → 関所）か、送信（送信画面 → 送信役）か
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

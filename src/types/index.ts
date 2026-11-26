@@ -45,3 +45,11 @@ export type Exchange = {
   bodyTruncated: boolean;
   error: string | null;
 };
+
+/** 名前を付けて保存したリクエスト（F9・F10）。Rust の SavedRequest（DB の表2） */
+export type SavedRequest = {
+  id: number;
+  name: string;
+  request: RequestInput;
+  createdAt: number;
+};

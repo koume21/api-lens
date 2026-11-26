@@ -27,7 +27,13 @@ export const EMPTY_REQUEST: RequestInput = {
   body: "",
 };
 
-export function SendPage() {
+/** ほかの画面から送信画面に読み込ませるリクエスト。key が変わるたびに読み込む */
+export type IncomingRequest = {
+  request: RequestInput;
+  key: number;
+};
+
+export function SendPage({ incoming }: { incoming: IncomingRequest | null }) {
   const [request, setRequest] = useState<RequestInput>(EMPTY_REQUEST);
   const [result, setResult] = useState<Exchange | null>(null);
   const [sending, setSending] = useState(false);
@@ -48,6 +54,15 @@ export function SendPage() {
       })
       .catch((e) => setError(String(e)));
   }, []);
+
+  // 観測画面から「送信画面にコピー」されたら、入力欄に読み込む（F17）。
+  // 保存リクエストとは結びつけず、前の結果も消す（どの結果か紛らわしくなるため）
+  useEffect(() => {
+    if (!incoming) return;
+    setRequest(incoming.request);
+    setCurrent(null);
+    setResult(null);
+  }, [incoming]);
 
   const send = async () => {
     setSending(true);

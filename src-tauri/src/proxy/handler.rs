@@ -7,7 +7,8 @@
 //! 流れ:
 //! 1. `handle_request`: 宛先が観測対象か調べる。対象なら本文を読み切って覚え、相手へ渡す
 //! 2. `handle_response`: 本文を読み切り、記録を作って `sink` に渡し、ブラウザへ返す
-//! 3. `should_intercept_connect`: HTTPS（CONNECT）を開いて中を見るか。いまは開かずに素通し
+//! 3. `should_intercept_connect`: HTTPS（CONNECT）を開いて中を見るか。
+//!    観測対象ホストだけ開き、それ以外は暗号化されたまま素通しする（F13・F21）
 
 use std::net::SocketAddr;
 use std::time::Instant;
@@ -180,9 +181,19 @@ impl HttpHandler for ObserveHandler {
         plain_response(StatusCode::BAD_GATEWAY, "api-lens: upstream error")
     }
 
-    /// HTTPS の通信を開いて中を見るか。いまは開かない（中身を見ずにそのまま素通しする）
-    async fn should_intercept_connect(&mut self, _ctx: &HttpContext, _req: &Request<Body>) -> bool {
-        false
+    /// HTTPS の通信（`CONNECT api.example.com:443`）を開いて中を見るか（F13）。
+    ///
+    /// 観測対象ホストのときだけ true にする。true にすると、関所が自分の認証局で
+    /// そのサイト用の証明書を作ってブラウザとの TLS をほどき、中の HTTP を
+    /// `handle_request` / `handle_response` に流してくれる（URL は `https://...` になる）。
+    /// false なら、暗号化されたまま相手とつなぐだけで、中身は一切見ない。
+    ///
+    /// 制約: 証明書ピンニングをするアプリや、キーチェーンで認証局を信頼していない
+    /// ブラウザでは、TLS の確立に失敗して通信できなくなる（対象ホストだけ）。
+    async fn should_intercept_connect(&mut self, _ctx: &HttpContext, req: &Request<Body>) -> bool {
+        req.uri()
+            .authority()
+            .is_some_and(|a| self.is_target(&a.as_str().to_lowercase()))
     }
 }
 

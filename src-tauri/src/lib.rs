@@ -31,10 +31,15 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
 
+            // HTTPS 観測用の認証局。初回起動時にここで作る（2 回目以降は読み込むだけ）。
+            // 秘密鍵はデータフォルダの中だけに置き、リポジトリや外部には出さない
+            let ca = proxy::cert::CaFiles::in_dir(&data_dir.join("ca"));
+            ca.ensure()?;
+
             let state = AppState {
                 client: client::HttpClient::new()?,
                 store: store::Store::open(&data_dir.join(DB_FILE))?,
-                proxy: proxy::ProxyController::new(),
+                proxy: proxy::ProxyController::new(ca),
             };
             // 前回までに登録した観測対象ホストを関所に知らせておく
             state.sync_proxy_hosts()?;
@@ -57,6 +62,8 @@ pub fn run() {
             commands::observe::list_observed,
             commands::observe::get_exchange,
             commands::observe::clear_observed,
+            commands::cert::ca_info,
+            commands::cert::reveal_ca_cert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

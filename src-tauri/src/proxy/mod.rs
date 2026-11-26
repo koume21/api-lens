@@ -8,9 +8,9 @@
 //!
 //! ファイル:
 //! - `handler.rs`: 1 件ごとの記録処理（hudsucker の `HttpHandler`）
-//! - `cert.rs`:    認証局（CA）証明書の生成
+//! - `cert.rs`:    認証局（CA）証明書の生成・保存・読み込み
 
-mod cert;
+pub mod cert;
 mod handler;
 
 use std::net::{Ipv4Addr, SocketAddr};
@@ -22,6 +22,7 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 use crate::models::Exchange;
+use cert::CaFiles;
 use handler::ObserveHandler;
 
 /// 記録した通信の受け取り手。関所は 1 件記録するたびにこれを呼ぶ
@@ -66,20 +67,23 @@ struct Running {
 pub struct ProxyController {
     hosts: SharedHosts,
     running: Mutex<Option<Running>>,
-}
-
-impl Default for ProxyController {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// HTTPS の中身を開くための認証局のファイル（F13）
+    ca: CaFiles,
 }
 
 impl ProxyController {
-    pub fn new() -> Self {
+    /// `ca` は `CaFiles::ensure` で作成済みであること（起動時に `lib.rs` が用意する）
+    pub fn new(ca: CaFiles) -> Self {
         Self {
             hosts: Arc::new(RwLock::new(Vec::new())),
             running: Mutex::new(None),
+            ca,
         }
+    }
+
+    /// 認証局のファイルの場所（証明書の登録手順の表示に使う）
+    pub fn ca_files(&self) -> &CaFiles {
+        &self.ca
     }
 
     /// 観測対象ホストを入れ替える（登録・削除のたびに受付が呼ぶ）。観測中でもすぐ効く
@@ -108,9 +112,9 @@ impl ProxyController {
             .map_err(ProxyError::Bind)?;
         let addr = listener.local_addr().map_err(ProxyError::Bind)?;
 
-        // HTTPS の中身を開くための認証局。いまは HTTPS を開かない（素通しする）ので、
-        // 起動のたびにメモリ上で作る使い捨てのもので足りる
-        let ca = cert::ephemeral_authority().map_err(ProxyError::Cert)?;
+        // HTTPS の中身を開くための認証局。保存してあるものを毎回読み込む
+        // （キーチェーンに登録した証明書と同じものを使い続ける必要があるため）
+        let ca = self.ca.load().map_err(ProxyError::Cert)?;
 
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
         let proxy = Proxy::builder()
@@ -199,7 +203,11 @@ mod tests {
             let _ = tx.send(ex);
         });
 
-        let controller = ProxyController::new();
+        let ca_dir =
+            std::env::temp_dir().join(format!("api-lens-proxy-test-{}", crate::models::now_ms()));
+        let ca = CaFiles::in_dir(&ca_dir);
+        ca.ensure().unwrap();
+        let controller = ProxyController::new(ca);
         controller.set_hosts(vec![target.to_string()]);
         let addr = controller.start(0, sink).await.unwrap();
         assert!(addr.ip().is_loopback());
@@ -227,5 +235,52 @@ mod tests {
 
         controller.stop();
         assert!(controller.status().is_none());
+        std::fs::remove_dir_all(&ca_dir).ok();
+    }
+
+    /// HTTPS の中身が見えるか（F13）を、実際のサイトで確かめる。
+    /// ネットワークが必要なので普段は動かさない: `cargo test -- --ignored`
+    #[tokio::test]
+    #[ignore]
+    async fn decrypts_https_for_registered_host() {
+        let ca_dir =
+            std::env::temp_dir().join(format!("api-lens-https-test-{}", crate::models::now_ms()));
+        let ca = CaFiles::in_dir(&ca_dir);
+        ca.ensure().unwrap();
+        let ca_pem = std::fs::read(&ca.cert_path).unwrap();
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Exchange>();
+        let sink: ExchangeSink = Arc::new(move |ex| {
+            let _ = tx.send(ex);
+        });
+        let controller = ProxyController::new(ca);
+        controller.set_hosts(vec!["example.com".into()]);
+        let addr = controller.start(0, sink).await.unwrap();
+
+        // ブラウザの代わり。キーチェーンに登録する代わりに、この認証局だけを信頼させる
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all(format!("http://{addr}")).unwrap())
+            .tls_certs_only([reqwest::Certificate::from_pem(&ca_pem).unwrap()])
+            .build()
+            .unwrap();
+        let body = client
+            .get("https://example.com/")
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        assert!(body.contains("Example Domain"));
+
+        let ex = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(ex.url, "https://example.com/");
+        assert!(ex.response_body.contains("Example Domain"));
+
+        controller.stop();
+        std::fs::remove_dir_all(&ca_dir).ok();
     }
 }
